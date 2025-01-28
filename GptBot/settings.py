@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 """
 
 from pathlib import Path
+from datetime import timedelta
 import environ
 import os
 
@@ -31,6 +32,10 @@ environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
+
+# SECURITY WARNING: keep the secret key used in production secret!
+SECRET_KEY = "django-insecure-^5t_v(rq2b8p!$8vgxl_8gcve^zl!u1c&55^xe5hetew&xhydn"
+
 
 # SECURITY WARNING: don't run with debug turned on in production!
 CORS_ALLOW_ALL_ORIGINS = True
@@ -53,7 +58,8 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "rest_framework",
     "rest_framework_simplejwt",
-    "drf_yasg"
+    "drf_yasg",
+    "BotRequestProecessing"
 ]
 
 MIDDLEWARE = [
