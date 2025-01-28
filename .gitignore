@@ -1,0 +1,15 @@
+.env
+.venv
+env
+/staticfiles
+
+# Ignore all __pycache__ directories globally
+**/__pycache__/
+*.py[cod]
+
+
+# Ignore Django migration cache but keep migration files
+**/migrations/**/__pycache__/
+
+**/migrations/*.py
+!**/migrations/__init__.py
