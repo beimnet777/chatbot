@@ -1,5 +1,6 @@
 import csv
 from PyPDF2 import PdfReader
+import os
 
 # Load employee data from a CSV file
 def load_employee_data(csv_path):
@@ -35,9 +36,11 @@ def create_system_prompt(employee_data, department_data):
 
 
 def load_all_data():
-    employee_data_path = '/content/New_Age_Employee_Data.csv'
-    it_department_path = '/content/IT_Team_Projects.pdf'
-    marketing_department_path = '/content/Marketing_Team_Projects.pdf'
+    BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    
+    employee_data_path = os.path.join(BASE_DIR, "BotRequestProecessing", 'files', 'New_Age_Employee_Data.csv')
+    it_department_path = os.path.join(BASE_DIR, "BotRequestProecessing", 'files', 'IT_Team_Projects.pdf')
+    marketing_department_path = os.path.join(BASE_DIR, "BotRequestProecessing", 'files', 'Marketing_Team_Projects.pdf') 
 
     # Load data once
     employee_data = load_employee_data(employee_data_path)

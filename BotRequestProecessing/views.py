@@ -3,7 +3,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from .data_loader import CONVERSATION_PROMPT
 from openai import OpenAI
-from django.config import settings
+from django.conf import settings
 
 
 
@@ -12,6 +12,7 @@ from django.config import settings
 
 class ChatAPIView(APIView):
     # Initialize the OpenAI client
+    print(CONVERSATION_PROMPT)
     client = OpenAI(
         api_key=settings.API_KEY
     )
@@ -51,6 +52,7 @@ class ChatAPIView(APIView):
     def post(self, request):
         user_input = request.data.get("message", "").strip()
         conversation = CONVERSATION_PROMPT
+        
 
         # Append user input to the conversation
         conversation.append({"role": "user", "content": user_input})
