@@ -1,13 +1,13 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from .data_loader import EMPLOYEE_DATA, FAISS_INDEX, TEXT_CHUNKS, CHUNK_TO_DEPARTMENT
+from .data_loader import EMPLOYEE_DATA, FAISS_INDEX, TEXT_CHUNKS, CHUNK_TO_DEPARTMENT, generate_embedding
 from openai import OpenAI
 from django.conf import settings
 
 
 
-
+# print(EMPLOYEE_DATA, FAISS_INDEX, TEXT_CHUNKS, CHUNK_TO_DEPARTMENT)
 
 
 class ChatAPIView(APIView):
@@ -17,9 +17,10 @@ class ChatAPIView(APIView):
         api_key=settings.API_KEY
     )
     
-    def retrieve_relevant_text(query, index, text_chunks, chunk_to_department, top_k=3):
-        query_embedding = generate_embedding(query).reshape(1, -1)
-        distances, indices = index.search(query_embedding, top_k)
+    def retrieve_relevant_text(self,query, index, text_chunks, chunk_to_department, top_k=3):
+        query_embedding = generate_embedding(query).reshape(1, -1) 
+        faiss_index = index[0]
+        distances, indices = faiss_index.search(query_embedding, top_k)
         
         results = []
         for i in indices[0]:
@@ -31,7 +32,7 @@ class ChatAPIView(APIView):
         return results  # Return structured data
         # return "\n".join(relevant_texts)
     
-    def create_department_chunk_dict(results, separator=" ||| "):
+    def create_department_chunk_dict(self, results, separator=" ||| "):
         department_chunks = {}
         
         for result in results:
@@ -46,7 +47,7 @@ class ChatAPIView(APIView):
         return department_chunks
         
     # Create the system prompt
-    def create_system_prompt(employee_data, department_data):
+    def create_system_prompt(self,employee_data, department_data):
         system_prompt = (
             "You are New Age GPT, a virtual assistant for New Age company. Your responsibilities are:\n"
             "- Authenticate users based on their ID, and verify access to specific department data.\n"
@@ -95,38 +96,38 @@ class ChatAPIView(APIView):
             return f"Error generating response: {e}"
 
     def post(self, request):
-        user_input = request.data.get("message", "").strip()
-        
-        close_results = retrieve_relevant_text(user_input, FAISS_INDEX, TEXT_CHUNKS, CHUNK_TO_DEPARTMENT, top_k=3)
-        department_data = create_department_chunk_dict(close_results, separator=" ||| "):
-        EMPLOYEE_DATA
-        
-        conversation = create_system_prompt(EMPLOYEE_DATA, department_data)
+        try:
+            user_input = request.data.get("message", "").strip()
             
-        
-        print(user_input, "***********")
+            close_results = self.retrieve_relevant_text(user_input, FAISS_INDEX, TEXT_CHUNKS, CHUNK_TO_DEPARTMENT, top_k=3)
+            department_data = self.create_department_chunk_dict(close_results, separator=" ||| ")
+            
+            
+            conversation = self.create_system_prompt(EMPLOYEE_DATA, department_data)
+            print(close_results, department_data, conversation)
+                
 
-        # Append user input to the conversation
-        conversation.append({"role": "user", "content": user_input})
-        
-        print(conversation, "***********")
+            # Append user input to the conversation
+            conversation.append({"role": "user", "content": user_input})
+            
 
-        # Check if the user wants to end the conversation
-        if self.detect_close_intent(conversation):
-            print("I am here")
+            # Check if the user wants to end the conversation
+            if self.detect_close_intent(conversation):
+                print("I am here")
+                return Response({
+                    "response": "Goodbye! Feel free to return anytime you need assistance.",
+                    "conversation": conversation,
+                }, status=status.HTTP_200_OK)
+
+            # Generate a response
+            response = self.generate_openai_response(conversation)
+
+            # Append the assistant's response to the conversation
+            conversation.append({"role": "assistant", "content": response})
+
             return Response({
-                "response": "Goodbye! Feel free to return anytime you need assistance.",
+                "response": response,
                 "conversation": conversation,
             }, status=status.HTTP_200_OK)
-
-        print(conversation, "***********&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&")
-        # Generate a response
-        response = self.generate_openai_response(conversation)
-
-        # Append the assistant's response to the conversation
-        conversation.append({"role": "assistant", "content": response})
-
-        return Response({
-            "response": response,
-            "conversation": conversation,
-        }, status=status.HTTP_200_OK)
+        except Exception as e:
+            print(e)

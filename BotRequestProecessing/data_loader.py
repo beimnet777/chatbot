@@ -4,8 +4,14 @@ import os
 import faiss
 import numpy as np
 from .models import Department
+from django.conf import settings
+from openai import OpenAI
 
 # Load employee data from a CSV file
+client = OpenAI(
+        api_key=settings.API_KEY
+    )
+
 def load_employee_data(csv_path):
     employee_data = {}
     with open(csv_path, 'r') as csvfile:
@@ -37,10 +43,17 @@ def build_faiss_index(text_chunks):
     
     embeddings = []
     for chunk in text_chunks:
+        # print(len(text_chunks), text_chunks)
         embedding = generate_embedding(chunk)
+        # if embedding.shape != (dimension,):
+            # print(f"Embedding shape mismatch: Expected ({dimension},), Got {embedding.shape}")
         embeddings.append(embedding)
     
     embeddings = np.array(embeddings, dtype=np.float32)
+    
+    if embeddings.ndim == 1:
+        embeddings = embeddings.reshape(1, -1)
+    # print(f"Final embeddings shape: {embeddings.shape}")
     index.add(embeddings)
 
     return index, text_chunks
@@ -76,6 +89,6 @@ def load_all_data():
     
     
 
-    return return employee_data, FAISS_INDEX, TEXT_CHUNKS, CHUNK_TO_DEPARTMENT
+    return (employee_data, FAISS_INDEX, TEXT_CHUNKS, CHUNK_TO_DEPARTMENT)
 
 EMPLOYEE_DATA, FAISS_INDEX, TEXT_CHUNKS, CHUNK_TO_DEPARTMENT = load_all_data()
