@@ -1,6 +1,9 @@
 import csv
 from PyPDF2 import PdfReader
 import os
+import faiss
+import numpy as np
+from .models import Department
 
 # Load employee data from a CSV file
 def load_employee_data(csv_path):
@@ -12,50 +15,67 @@ def load_employee_data(csv_path):
     return employee_data
 
 # Extract department-specific data from a PDF
-def extract_pdf_data(pdf_path):
+def extract_pdf_data(pdf_path, chunk_size=300):
     reader = PdfReader(pdf_path)
-    content = ""
+    content = []
     for page in reader.pages:
-        content += page.extract_text()
-    return content.strip()
+        text = page.extract_text()
+        if text:
+            content.extend([text[i:i+chunk_size] for i in range(0, len(text), chunk_size)])
+    return content
 
-# Create the system prompt
-def create_system_prompt(employee_data, department_data):
-    system_prompt = (
-        "You are New Age GPT, a virtual assistant for New Age company. Your responsibilities are:\n"
-        "- Authenticate users based on their ID, and verify access to specific department data.\n"
-        "- Understand natural user intents, including when users want to end the conversation with phrases like 'thanks,' 'all good,' 'bye,' 'no more help,' or similar.\n"
-        "- If the user wants to end the conversation, respond politely and close the session.\n\n"
-        "### Employee Data ###\n"
-        f"{employee_data}\n\n"
-        "### Department Data ###\n"
-        f"{department_data}\n\n"
-        "Respond naturally, concisely, and professionally at all times."
+def generate_embedding(text):
+    response = client.embeddings.create(
+        model="text-embedding-ada-002",
+        input=text
     )
-    return [{"role": "system", "content": system_prompt}]
+    return np.array(response.data[0].embedding, dtype=np.float32)
+
+def build_faiss_index(text_chunks):
+    dimension = 1536  # Embedding size for 'text-embedding-ada-002'
+    index = faiss.IndexFlatL2(dimension)
+    
+    embeddings = []
+    for chunk in text_chunks:
+        embedding = generate_embedding(chunk)
+        embeddings.append(embedding)
+    
+    embeddings = np.array(embeddings, dtype=np.float32)
+    index.add(embeddings)
+
+    return index, text_chunks
+
 
 
 def load_all_data():
     BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     
     employee_data_path = os.path.join(BASE_DIR, "BotRequestProecessing", 'files', 'New_Age_Employee_Data.csv')
-    it_department_path = os.path.join(BASE_DIR, "BotRequestProecessing", 'files', 'IT_Team_Projects.pdf')
-    marketing_department_path = os.path.join(BASE_DIR, "BotRequestProecessing", 'files', 'Marketing_Team_Projects.pdf') 
+    
 
     # Load data once
     employee_data = load_employee_data(employee_data_path)
-    it_department_data = extract_pdf_data(it_department_path)
-    marketing_department_data = extract_pdf_data(marketing_department_path)
-
-    # Combine department-specific data
-    department_data = {
-        "IT": it_department_data,
-        "Marketing": marketing_department_data,
-    }
     
-    # Create system prompt 
-    conversation = create_system_prompt(employee_data, department_data)
+    TEXT_CHUNKS = []  
+    CHUNK_TO_DEPARTMENT = {}
 
-    return conversation
+    
 
-CONVERSATION_PROMPT = load_all_data()
+    departments = Department.objects.all()
+    for dept in departments:
+        pdf_path = os.path.join(settings.MEDIA_ROOT, dept.file.name)
+        text_chunks = extract_pdf_data(pdf_path)
+        
+        for i, chunk in enumerate(text_chunks):
+            CHUNK_TO_DEPARTMENT[len(TEXT_CHUNKS) + i] = dept.name  # Map chunk index to department
+        
+        TEXT_CHUNKS.extend(text_chunks)
+    
+    # Build a single FAISS index
+    FAISS_INDEX = build_faiss_index(TEXT_CHUNKS)
+    
+    
+
+    return return employee_data, FAISS_INDEX, TEXT_CHUNKS, CHUNK_TO_DEPARTMENT
+
+EMPLOYEE_DATA, FAISS_INDEX, TEXT_CHUNKS, CHUNK_TO_DEPARTMENT = load_all_data()
