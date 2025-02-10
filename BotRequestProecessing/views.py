@@ -1,7 +1,7 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from .data_loader import EMPLOYEE_DATA, FAISS_INDEX, TEXT_CHUNKS, CHUNK_TO_DEPARTMENT, generate_embedding
+from .utils.policy_loader import POLICY_TEXTS, POLICY_FILES, EMPLOYEE_DATA
 from openai import OpenAI
 from django.conf import settings
 
@@ -17,49 +17,44 @@ class ChatAPIView(APIView):
         api_key=settings.API_KEY
     )
     
-    def retrieve_relevant_text(self,query, index, text_chunks, chunk_to_department, top_k=3):
-        query_embedding = generate_embedding(query).reshape(1, -1) 
-        faiss_index = index[0]
-        distances, indices = faiss_index.search(query_embedding, top_k)
-        
-        results = []
-        for i in indices[0]:
-            if i < len(text_chunks):  # Ensure index is within bounds
-                chunk = text_chunks[i]
-                department = chunk_to_department.get(i, "Unknown")  # Get department name
-                results.append({"department": department, "text": chunk})
+    def get_relevant_policies(self, contract_type, POLICY_TEXTS):
+        """Fetches policies relevant to the contract type from memory."""
+        relevant_policies = {}
 
-        return results  # Return structured data
-        # return "\n".join(relevant_texts)
+        for policy_name, policy_text in POLICY_TEXTS.items():
+            # Extract contract types from file name (e.g., "C1-C2" or "C1-C2-C3")
+            policy_contracts = policy_name.replace(".pdf", "").replace(".docx", "").split("-")
+
+            # Ensure contract type is allowed
+            if contract_type.lower() in policy_contracts or "c1-c2-c3" in policy_contracts:
+                relevant_policies[policy_name] = policy_text  # Fetch from memory
+
+        return relevant_policies
     
-    def create_department_chunk_dict(self, results, separator=" ||| "):
-        department_chunks = {}
-        
-        for result in results:
-            dept = result.get("department", "Unknown")
-            text = result.get("text", "")
-            
-            if dept in department_chunks:
-                department_chunks[dept] += separator + text
-            else:
-                department_chunks[dept] = text
-
-        return department_chunks
+    def validate_employee_id(self,employee_data, emp_id):
+        """Check if Employee ID is valid and return contract type."""
+        emp_id = str(emp_id)  # Ensure input Employee ID is treated as a string
+        return employee_data.get(emp_id)
+    
+    
         
     # Create the system prompt
-    def create_system_prompt(self,employee_data, department_data):
-        system_prompt = (
-            "You are New Age GPT, a virtual assistant for New Age company. Your responsibilities are:\n"
-            "- Authenticate users based on their ID, and verify access to specific department data.\n"
-            "- Understand natural user intents, including when users want to end the conversation with phrases like 'thanks,' 'all good,' 'bye,' 'no more help,' or similar.\n"
-            "- If the user wants to end the conversation, respond politely and close the session.\n\n"
-            "### Employee Data ###\n"
-            f"{employee_data}\n\n"
-            "### Department Data ###\n"
-            f"{department_data}\n\n"
-            "Respond naturally, concisely, and professionally at all times."
-        )
-        return [{"role": "system", "content": system_prompt}]
+    def create_system_prompt(self):
+        conversation_history = [
+                                {"role": "system", "content": (
+                                    "You are an AI assistant helping employees understand and access company policies.\n\n"
+                                    "💡 **Key Rules for Responses:**\n"
+                                    "1️⃣ Always provide concise and **structured summaries** of policies.\n"
+                                    "2️⃣ If the user asks about a policy they have **access to**, summarize it **clearly** with actionable insights.\n"
+                                    "3️⃣ If the user asks for more details, **progressively reveal** more information instead of declining the request.\n"
+                                    "4️⃣ **DO NOT list all policies** unless the user explicitly asks for it.\n"
+                                    "5️⃣ If a user asks for a policy **they do not have access to**, say:\n"
+                                    "   ❌ 'This policy is restricted to [C1/C2/C3] employees.'\n"
+                                    "6️⃣ If an employee asks, 'Can you send me the full policy document?', provide the download link if permitted.\n"
+                                    "7️⃣ **Avoid repeating information** unnecessarily. Give relevant details only when needed.\n"
+                                )}
+                            ]
+        return conversation_history
 
     # Check for close intent with OpenAI
     def detect_close_intent(self,conversation):
@@ -98,17 +93,42 @@ class ChatAPIView(APIView):
     def post(self, request):
         try:
             user_input = request.data.get("message", "").strip()
+            user_id = request.data.get("id", "").strip()
+            contract_type = self.validate_employee_id(EMPLOYEE_DATA, user_id)
+            print(EMPLOYEE_DATA, user_id, "***********88", request.data.get("id"))
+            print(user_input)
             
-            close_results = self.retrieve_relevant_text(user_input, FAISS_INDEX, TEXT_CHUNKS, CHUNK_TO_DEPARTMENT, top_k=3)
-            department_data = self.create_department_chunk_dict(close_results, separator=" ||| ")
+            if not contract_type:
+                return Response({
+                    "response": "Invalid Employee Id"
+                }, status=status.HTTP_200_OK)
+            
+            relevant_policies = self.get_relevant_policies(contract_type, POLICY_TEXTS)
+            
+            if not relevant_policies:
+                return Response({
+                    "response": f"❌ No policies found specifically for contract type: {contract_type}. However, some general company policies might still be applicable."
+                }, status=status.HTTP_200_OK)
+            
+            # Try to find the most relevant policy
+            requested_policy = None
+            for policy_name in relevant_policies.keys():
+                if any(word in policy_name.lower() for word in user_input.split()):
+                    requested_policy = policy_name
+                    break
+
+            if not requested_policy:
+                return Response({
+                    "response": "❌ You do not have access to this policy or it does not exist."
+                }, status=status.HTTP_200_OK)
+                
             
             
-            conversation = self.create_system_prompt(EMPLOYEE_DATA, department_data)
-            print(close_results, department_data, conversation)
+            
+            conversation = self.create_system_prompt()
+            conversation.append({"role": "user", "content": user_input})
                 
 
-            # Append user input to the conversation
-            conversation.append({"role": "user", "content": user_input})
             
 
             # Check if the user wants to end the conversation
@@ -118,6 +138,8 @@ class ChatAPIView(APIView):
                     "response": "Goodbye! Feel free to return anytime you need assistance.",
                     "conversation": conversation,
                 }, status=status.HTTP_200_OK)
+            
+            conversation.append({"role": "system", "content": str(relevant_policies[requested_policy])})
 
             # Generate a response
             response = self.generate_openai_response(conversation)

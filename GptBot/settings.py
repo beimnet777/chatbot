@@ -162,3 +162,8 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')  # Physical storage location
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 API_KEY = env('API_KEY')
+TENANT_ID = env('TENANT_ID')
+CLIENT_ID = env('CLIENT_ID')
+CLIENT_SECRET = env('CLIENT_SECRET')
+DOCUMENTS_DRIVE_ID = env('DOCUMENTS_DRIVE_ID')
+COMPANY_POLICIES_FOLDER_ID = env('COMPANY_POLICIES_FOLDER_ID')
