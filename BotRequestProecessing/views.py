@@ -117,7 +117,7 @@ class ChatAPIView(APIView):
                     requested_policy = policy_name
                     break
 
-            if not requested_policy:
+            if not requested_policy and "policy" in user_input:
                 return Response({
                     "response": "❌ You do not have access to this policy or it does not exist."
                 }, status=status.HTTP_200_OK)
