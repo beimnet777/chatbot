@@ -127,6 +127,7 @@ class ChatAPIView(APIView):
             
             conversation = self.create_system_prompt()
             conversation.append({"role": "user", "content": user_input})
+            conversation.append({"role": "system", "content": f"The user Contract Type is {contract_type}"})
                 
 
             
@@ -139,7 +140,8 @@ class ChatAPIView(APIView):
                     "conversation": conversation,
                 }, status=status.HTTP_200_OK)
             
-            conversation.append({"role": "system", "content": str(relevant_policies[requested_policy])})
+            if requested_policy:
+                conversation.append({"role": "system", "content": str(relevant_policies[requested_policy])})
 
             # Generate a response
             response = self.generate_openai_response(conversation)
