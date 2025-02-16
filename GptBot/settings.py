@@ -148,10 +148,22 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.1/howto/static-files/
 
+# STATIC_URL = "/static/"
+# STATIC_ROOT = os.path.join(BASE_DIR, 'static')
+
 STATIC_URL = "static/"
+STATIC_ROOT = "static/"
+
+MEDIA_URL = '/media/'  # URL for accessing media files
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')  # Physical storage location
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 API_KEY = env('API_KEY')
+TENANT_ID = env('TENANT_ID')
+CLIENT_ID = env('CLIENT_ID')
+CLIENT_SECRET = env('CLIENT_SECRET')
+DOCUMENTS_DRIVE_ID = env('DOCUMENTS_DRIVE_ID')
+COMPANY_POLICIES_FOLDER_ID = env('COMPANY_POLICIES_FOLDER_ID')
